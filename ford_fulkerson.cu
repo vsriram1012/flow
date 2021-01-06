@@ -6,33 +6,20 @@ struct edge{
 };
 
 __global__ void find_augmenting_path(edge *d_edges, int m, int *vis, int *par, 
-									int *current_flow, int *progress, int *iter, int *finish){
+									int *current_flow, int *progress){
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	int i = 0;
 	if(id < m){
-		do{		
-			if(id == 0){
-				*finish = 0;
-				*progress = 0;
-				*iter = *iter + 1;
-				__threadfence();
-			}
-			while(i == *iter);	// global barrier until initialization
-			int u = d_edges[id].u, v = d_edges[id].v, c = d_edges[id].c, f = d_edges[id].f;
-			if(vis[u] && !vis[v] && f < c && atomicCAS(par+v, -1, id) == -1){
-				vis[v] = 1;
-				current_flow[v] = min(current_flow[u], c - f);
-				atomicAdd(progress, 1);
-			}
-			if(vis[v] && !vis[u] && f > 0 && atomicCAS(par+u, -1, id) == -1){
-				vis[u] = 1;
-				current_flow[u] = min(current_flow[v], f);
-				atomicAdd(progress, 1);
-			}
-			i += 1;
-			atomicAdd(finish, 1);
-			while(*finish!=m);	//global barrier until all threads finish
-		}while(*progress);
+		int u = d_edges[id].u, v = d_edges[id].v, c = d_edges[id].c, f = d_edges[id].f;
+		if(vis[u] && !vis[v] && f < c && atomicCAS(par+v, -1, id) == -1){
+			vis[v] = 1;
+			current_flow[v] = min(current_flow[u], c - f);
+			atomicAdd(progress, 1);
+		}
+		if(vis[v] && !vis[u] && f > 0 && atomicCAS(par+u, -1, id) == -1){
+			vis[u] = 1;
+			current_flow[u] = min(current_flow[v], f);
+			atomicAdd(progress, 1);
+		}
 	}
 
 }
@@ -69,9 +56,7 @@ int main(int argc, char* argv[]){
 	int n, m, INF = 1000000000;
 	edge *edges, *d_edges;
 	// progress - if atleast one new vertex marked
-	// iter - iteration number
-	// finish - counts how many are finished
-	int *vis, *par, *progress, *iter, *finish, *current_flow;	
+	int *vis, *par, *progress, *current_flow;	
 
 	ifstream fin(argv[1]);
 	fin >> n >> m;
@@ -92,8 +77,6 @@ int main(int argc, char* argv[]){
 	cudaMalloc(&par, n * sizeof(int));
 	cudaMalloc(&current_flow, n * sizeof(int));
 	cudaMalloc(&progress, sizeof(int));
-	cudaMalloc(&iter, sizeof(int));
-	cudaMalloc(&finish, sizeof(int));
 	int threads = 1024;
 	int blocks = ceil((float)m/threads);
 	int total_flow = 0;
@@ -102,10 +85,14 @@ int main(int argc, char* argv[]){
 		cudaMemset(vis, 0, n * sizeof(int));
 		cudaMemset(par, -1, n * sizeof(int));
 		cudaMemset(current_flow, 0, n * sizeof(int));
-		cudaMemset(iter, 0, sizeof(int));
 		cudaMemset(vis, 1, sizeof(int));
 		cudaMemcpy(current_flow, &INF, sizeof(int), cudaMemcpyHostToDevice);
-		find_augmenting_path<<<blocks,threads>>>(d_edges, m, vis, par, current_flow, progress, iter, finish);
+		int prog;
+		do{
+			cudaMemset(progress, 0, sizeof(int));
+			find_augmenting_path<<<blocks,threads>>>(d_edges, m, vis, par, current_flow, progress);
+			cudaMemcpy(&prog, progress, sizeof(int), cudaMemcpyDeviceToHost);
+		}while(prog);
 		int t_reachable;
 		int cur_flow;
 		cudaMemcpy(&t_reachable, vis + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
