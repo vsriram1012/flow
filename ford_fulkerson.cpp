@@ -1,95 +1,111 @@
 #include<bits/stdc++.h>
 using namespace std;
-#define ii pair<int,int>
-#define vi vector<int>
-#define vvi vector<vi>
-#define pb push_back
-#define mp make_pair
 #define INF 1000000000
-#define F first
-#define S second
-struct flow
-{
-    int n,isDir;
-    vvi g,rg;
-    int s,t;
-    flow(int _n,int _isDir=true)   :n(_n),isDir(_isDir){
-        g.resize(n);
-        rg.assign(n,vi(n,0));
-    }
-    void addEdge(int u,int v,int w=1)
-    {
-        g[u].pb(v);
-        g[v].pb(u);
-        rg[u][v]=w;
-        if(!isDir)
-            rg[v][u]=w;
-    }
-    int sendFlow() 
-    {
-        vi p(n,-1);
-        queue<ii> q;
-        q.push(mp(s,INF));
-        int flow=0;
-        while(!q.empty())
-        {
-            ii tmp=q.front();
-            q.pop();
-            int u=tmp.F,f=tmp.S;
-            if(u==t)    
-            {
-                flow=f;
-                break;
-            }
-            for(int v:g[u])
-            {
-                if(p[v]==-1 && rg[u][v])
-                {
-                    p[v]=u;
-                    int df=min(f,rg[u][v]);
-                    q.push(mp(v,df));
-                }
-            }
-        }
-        if(!flow)   return 0;
-        int cur=t;
-        while(cur!=s)
-        {
-            int pcur=p[cur];
-            rg[cur][pcur]+=flow;
-            rg[pcur][cur]-=flow;
-            cur=pcur;
-        }
-        return flow;
-    }
-    int maxflow(int _s,int _t)
-    {
-        s=_s,t=_t;
-        int res=0;
-        int flow;
-        while(flow=sendFlow())
-            res+=flow;
-        return res;
-    }
 
+// A structure that stores the flow along a directed edge
+struct edge{
+	int u, v, c, f;
 };
+
+// This method uses dfs to find augmenting path
+struct FordFulkerson{
+	int n;
+	vector<edge> edges;
+	vector<int> vis, par, val;
+	vector<vector<int>> adj;
+
+	FordFulkerson(int _n){
+		n = _n;
+		adj.resize(n);
+	}
+
+	void addEdge(int u, int v, int c){
+		adj[u].push_back(edges.size());
+		adj[v].push_back(edges.size());
+		edge e = {u, v, c, 0};
+		edges.push_back(e);
+	}
+
+	// finds augmenting path using DFS
+	void find_augmenting_path(int u){
+		vis[u] = 1;
+		for(int id: adj[u]){
+			int a = edges[id].u, b = edges[id].v, c = edges[id].c, f = edges[id].f;
+			// checking if forward edge uv is present in residual graph
+			if(a == u && f < c && !vis[b]){
+				val[b] = min(val[a], c - f);
+				par[b] = id;
+				find_augmenting_path(b);
+			}
+
+			// checking if reverse edge vu is present in residual graph
+			if(b == u && f > 0 && !vis[a]){
+				val[a] = min(val[b],f);
+				par[a] = id;
+				find_augmenting_path(a);
+			}
+		}
+	}
+
+	// augments along the path found by find_augmenting_path
+	void augment(int s, int t, int flow){
+		int cur = t;
+		while(cur != s){
+			int id = par[cur];
+			int a = edges[id].u, b = edges[id].v;
+			if(b == cur){
+				edges[id].f += flow;
+				cur = a;
+			}
+			else{
+				edges[id].f -= flow;
+				cur = b;
+			}
+		}
+	}
+
+	// computes maxflow from s to t
+	int maxflow(int s,int t){
+		int total_flow = 0;
+		while(true){
+			vis.assign(n, 0);
+			par.assign(n, -1);
+			val.assign(n, 0);
+			val[s] = INF;
+			find_augmenting_path(s);
+			// checks if end point t is reachable from s, breaks if false
+			if(!vis[t])	break;
+			total_flow += val[t];
+			augment(s, t, val[t]);
+		}
+		return total_flow;
+	}
+};
+
 int main(int argc, char* argv[]){
+	auto clk = clock();
 	if(argc < 2){
-		cout<<"Enter file name"<<endl;
+		cout<<"Enter input graph (filename)"<<endl;
 		return 0;
 	}
+
 	int n, m;
 	ifstream fin(argv[1]);
 	fin >> n >> m;
-	flow graf(n);
+
+	FordFulkerson graf(n);
+
 	for(int i=0;i<m;i++){
-		int u,v,c;
-		fin>>u>>v>>c;
-		u--;v--;
-		graf.addEdge(u,v,c);
+		int u, v, c;
+		fin >> u >> v >> c;
+		u--; v--;
+		graf.addEdge(u, v, c);
 	}
-	auto clk=clock();
+
+	//computes total flow
 	int total_flow = graf.maxflow(0,n-1);
+
 	double t_elapsed = (double)(clock()-clk)/CLOCKS_PER_SEC;
-	printf("|V|:%d |E|:%d Flow:%d Time:%f\n", n, m, total_flow, t_elapsed);	
+	printf("|V|:%d |E|:%d Flow:%d\nTime:%f\n", n, m, total_flow, t_elapsed);	
+	return 0;
 }
