@@ -100,7 +100,7 @@ int main(int argc, char* argv[]){
 	auto clk=clock();
 
 	if(argc < 3){
-		cout<<"Enter file name and global relabel heuristic flag (0 or 1)"<<endl;
+		cout<<"Enter file name (graph) and global relabel heuristic flag (0 or 1)"<<endl;
 		return 0;
 	}
 
