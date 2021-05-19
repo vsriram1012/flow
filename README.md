@@ -43,5 +43,9 @@ For other binaries, use:
 ```
 ./<binary> <graph_filename>
 ```
+Example:
+```
+./edmond_karp_gpu <graph_filename>
+```
 
 
